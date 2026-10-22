@@ -6,7 +6,7 @@
 
 - ✅ 链式 API：`OrzAppLocker.chain.configure(...).show(...)`
 - ✅ Keychain 可配置（service / key / accessibility）
-- ✅ 文案与主题可配置（内置 `zhCN` / `enUS`、`dark` / `light`）
+- ✅ 文案与主题可配置（内置 `zhCN` / `enUS`、`dark` / `light` / `adaptive`）
 - ✅ 无 LocalAuthentication 依赖
 - ✅ `Action.lock` 自动检测是否已设置 PIN（无 PIN 自动进入设置流程）
 
@@ -91,11 +91,30 @@ OrzAppLocker.chain
 `OrzAppLocker.Configuration` 主要字段：
 - `keychain`：`service / key / accessibility`（来自 [Valet](https://github.com/square/Valet) 的 `Accessibility`）
 - `strings`：文案（内置 `Strings.zhCN / .enUS`）
-- `theme`：主题（内置 `Theme.dark / .light`）
+- `theme`：主题（内置 `Theme.dark / .light / .adaptive`）
 - `image`：头像/图片，不传则隐藏
 - `cancelVisibility`：取消按钮显示策略（`.automatic / .hidden / .visible`）
 - `onResult`：成功/取消回调
 - `onFailedAttempt`：输错 PIN（或两次不一致）回调
+
+## 亮暗模式
+
+`.dark` / `.light` 是固定配色，适合要求锁屏始终一个样子的 App。
+
+需要跟随系统亮暗模式时用 `.adaptive`：
+
+```swift
+OrzAppLocker.chain
+    .configure(.default(service: "com.yourapp.locker", theme: .adaptive))
+    .lock(over: rootVC)
+```
+
+`.adaptive` 用的是语义色（`.systemBackground` / `.label` / `.secondaryLabel` 等），所以：
+
+- 系统亮暗切换时**不需要重建锁屏**，视图自己重取色
+- 锁屏**显示期间**切换外观也会立即跟随（`AppLocker` 内部监听 trait 变化并重新应用主题；
+  密码点、按键圆圈、头像描边是自绘的，会一起重绘）
+- 提高对比度、着色外观等辅助模式同样生效
 
 ## 使用要点 / 注意事项
 
@@ -114,6 +133,17 @@ OrzAppLocker.chain
 ## 依赖
 
 - [Valet](https://github.com/square/Valet) - Keychain 访问封装
+
+## 变更记录
+
+### 0.1.0
+
+- 新增 `Theme.adaptive`：跟随系统亮暗模式的语义色主题
+- 锁屏在显示期间响应 `UITraitCollection` 变化（iOS 17 用 `registerForTraitChanges`，
+  iOS 13–16 回退 `traitCollectionDidChange`），切外观即时生效
+- 修复描边色用 `static var` 存放的问题：密码点、按键圆圈、头像描边的颜色改为实例属性，
+  多锁屏/多窗口不再互相覆盖；`photoImageView` 的 IBOutlet 类型改为 `PhotoImageView`
+- 新增 `OrzAppLockerTests`（`.adaptive` 跟随 trait、固定配色不跟随、描边色实例隔离）
 
 ## License
 
