@@ -173,6 +173,25 @@ public enum OrzAppLocker {
             )
         }
 
+        /// 跟随系统亮暗模式的自适应配色。
+        ///
+        /// 全部使用语义色：系统切换亮暗、提高对比度、着色外观时都会自动跟随，
+        /// 且不需要重建锁屏界面。
+        public static var adaptive: Theme {
+            Theme(
+                backgroundColor: .systemBackground,
+                titleColor: .label,
+                subtitleColor: .secondaryLabel,
+                indicatorFilledColor: .label,
+                indicatorEmptyColor: .clear,
+                indicatorStrokeColor: .label,
+                keypadTextColor: .label,
+                keypadHighlightTextColor: .systemGreen,
+                keypadStrokeColor: .label,
+                photoStrokeColor: .label
+            )
+        }
+
         public static var light: Theme {
             Theme(
                 backgroundColor: .white,
@@ -269,7 +288,7 @@ private enum Constants {
 
 @objc(AppLocker)
 final class AppLocker: UIViewController {
-    @IBOutlet weak var photoImageView: UIImageView!
+    @IBOutlet weak var photoImageView: PhotoImageView!
     @IBOutlet weak var messageLabel: UILabel!
     @IBOutlet weak var submessageLabel: UILabel!
     @IBOutlet var pinIndicators: [Indicator]!
@@ -295,6 +314,29 @@ final class AppLocker: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         modalPresentationStyle = .fullScreen
+        observeUserInterfaceStyle()
+    }
+
+    /// 锁屏显示期间系统切换亮暗模式时，重新应用主题。
+    ///
+    /// 主题色可能是动态色，视图会自己重取色；但密码点、按键圆圈、头像描边是
+    /// `draw` 里转 `cgColor` 画的，必须重绘才会按新 trait 解析。
+    private func observeUserInterfaceStyle() {
+        if #available(iOS 17.0, *) {
+            registerForTraitChanges([UITraitUserInterfaceStyle.self]) {
+                (viewController: AppLocker, _: UITraitCollection) in
+                viewController.applyTheme()
+            }
+        }
+    }
+
+    override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
+        super.traitCollectionDidChange(previousTraitCollection)
+        // iOS 17 起走 registerForTraitChanges，这里只作旧系统回退。
+        if #unavailable(iOS 17.0),
+           previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle {
+            applyTheme()
+        }
     }
     
     fileprivate enum Mode {
@@ -454,14 +496,18 @@ final class AppLocker: UIViewController {
     }
     
     fileprivate func applyTheme() {
-        view.backgroundColor = configuration.theme.backgroundColor
-        messageLabel.textColor = configuration.theme.titleColor
-        submessageLabel.textColor = configuration.theme.subtitleColor
-        Indicator.strokeColor = configuration.theme.indicatorStrokeColor
-        PinIndicator.strokeColor = configuration.theme.keypadStrokeColor
-        PhotoImageView.strokeColor = configuration.theme.photoStrokeColor
-        pinIndicators.forEach { $0.setNeedsDisplay() }
-        photoImageView.setNeedsDisplay()
+        let theme = configuration.theme
+        view.backgroundColor = theme.backgroundColor
+        messageLabel.textColor = theme.titleColor
+        submessageLabel.textColor = theme.subtitleColor
+
+        pinIndicators.forEach { $0.refreshStrokeColor(theme.indicatorStrokeColor) }
+        photoImageView.refreshStrokeColor(theme.photoStrokeColor)
+        allButtons(in: view).forEach { button in
+            button.setTitleColor(theme.keypadTextColor, for: .normal)
+            button.setTitleColor(theme.keypadHighlightTextColor, for: .highlighted)
+            (button as? PinIndicator)?.refreshStrokeColor(theme.keypadStrokeColor)
+        }
     }
     
     fileprivate func setupTexts() {
